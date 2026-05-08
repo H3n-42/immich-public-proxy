@@ -121,6 +121,43 @@ export async function request (endpoint: string, init?: RequestInit) {
   }
 }
 
+  /**
+   * Return the correct preview size, depending on the image MIME type
+   */
+  export function getPreviewImageSize (asset: Asset) {
+    // For certain media types, use the original file rather than the preview
+    if (['image/gif'].includes(asset.originalMimeType || '')) {
+      return ImageSize.original
+    } else {
+      return ImageSize.preview
+    }
+  }
+
+  /**
+   * Upload a file to an Immich shared album on behalf of the visitor.
+   * Requires the shared link to have `allowUpload` enabled in Immich.
+   */
+  export async function uploadAsset (key: string, keyType: KeyType, password: string | undefined, file: Express.Multer.File): Promise<{ id: string; status: string }> {
+    const url = buildUrl(apiUrl() + '/assets', {
+      [keyType]: key,
+      password
+    })
+    const now = new Date().toISOString()
+    const form = new FormData()
+    form.append('assetData', new Blob([file.buffer.buffer as ArrayBuffer], { type: file.mimetype }), file.originalname)
+    form.append('deviceAssetId', Date.now() + '-' + file.originalname)
+    form.append('deviceId', 'immich-public-proxy')
+    form.append('fileCreatedAt', now)
+    form.append('fileModifiedAt', now)
+    const res = await fetch(url, { method: 'POST', body: form })
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '')
+      throw new Error('Immich upload failed with status ' + res.status + ': ' + msg)
+    }
+    return res.json() as Promise<{ id: string; status: string }>
+  }
+
+
 export function apiUrl () {
   return (process.env.IMMICH_URL || '').replace(/\/*$/, '') + '/api'
 }

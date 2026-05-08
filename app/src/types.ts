@@ -93,6 +93,7 @@ export interface SharedLink {
   assets: Asset[];
   allowDownload?: boolean;
   showMetadata?: boolean;
+  allowUpload?: boolean;
   password?: string;
   album?: {
     id: string;

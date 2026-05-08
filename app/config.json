@@ -9,6 +9,8 @@
     "downloadedFilename": 0,
     "allowDownload": 0,
     "downloadFromImmichConcurrencyLimit": 20,
+    "allowDownloadAll": 0,
+    "allowUpload": true,
     "allowSlugLinks": true,
     "showHomePage": true,
     "showMetadata": {

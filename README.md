@@ -1,10 +1,14 @@
 # Immich Public Proxy
 
 <p align="center" width="100%">
+<img src="docs/ipp.svg" width="180" height="180">
+</p>
+
+<p align="center" width="100%">
 <a href="https://hub.docker.com/r/alangrainger/immich-public-proxy/tags">
     <img alt="Docker pulls" src="https://badgen.net/docker/pulls/alangrainger/immich-public-proxy?icon=docker&label=docker%20pulls&color=green&scale=1.1"></a>
 <a href="https://github.com/alangrainger/immich-public-proxy/releases/latest">
-    <img alt="Latest release" src="https://badgen.net/github/release/alangrainger/immich-public-proxy?scale=1.1"></a>
+    <img alt="Latest release" src="https://badgen.net/github/tag/alangrainger/immich-public-proxy?scale=1.1&label=release"></a>
 <a href="https://immich-demo.note.sx/share/gJfs8l4LcJJrBUpjhMnDoKXFt1Tm5vKXPbXl8BgwPtLtEBCOOObqbQdV5i0oun5hZjQ"><img alt="Open demo gallery" src="https://badgen.net/static/↗🖼️/live%20demo/green?scale=1.1"></a>
 </p>
 
@@ -16,22 +20,16 @@ serving straight out of my own Immich instance.
 Setup takes less than a minute, and you never need to touch it again as all of your sharing stays managed within Immich.
 
 <p align="center" width="100%">
-<img src="docs/ipp.svg" width="200" height="200">
+<img src="docs/screenshot.webp" width="602" height="414" border="1px solid white">
 </p>
 
 ### Table of Contents
 
 - [About this project](#about-this-project)
 - [Installation](#installation)
-  - [Install with Docker](#install-with-docker--podman)
-  - [Install with Kubernetes](docs/kubernetes.md)
 - [How to use it](#how-to-use-it)
 - [How it works](#how-it-works)
-- [Additional configuration](#additional-configuration)
-  - [IPP options](#immich-public-proxy-options)
-  - [lightGallery](#lightgallery)
-  - [Custom error pages](#customising-your-error-response-pages)
-  - [Serving from multiple domains](#serving-from-multiple-domains)
+- [Configuration](docs/configuration.md)
 - [Troubleshooting](#troubleshooting)
 - [Feature requests](#feature-requests)
 
@@ -51,6 +49,10 @@ surface even further. The only things that the proxy can access are photos that 
 - Supports sharing photos and videos.
 - Supports password-protected shares.
 - If sharing a single image, by default the link will directly open the image file so that you can embed it anywhere you would a normal image. (This is configurable.)
+- Gallery styled to match Immich's native look, with light/dark mode following the visitor's system preference.
+- Handles very large shares smoothly thanks to virtualized rendering - the browser only keeps tiles near the viewport in the DOM.
+- Optional multi-select mode so visitors can pick specific photos and download them together as a zip.
+- Optional date-grouped view (off by default), with month headers like "December 2024".
 - All usage happens through Immich - you won't need to touch this app after the initial configuration.
 
 ### Why not simply put Immich behind a reverse proxy and only expose the `/share/` path to the public?
@@ -130,97 +132,9 @@ If the shared link has expired or any of the assets have been put in the Immich 
 
 All incoming data is validated and sanitised, and anything unexpected is simply dropped with a 404.
 
-## Additional configuration
+## Configuration
 
-There are some additional configuration options you can change, for example the way the gallery is set up.
-
-1. Make a copy of [config.json](https://github.com/alangrainger/immich-public-proxy/blob/main/app/config.json) in the same folder as your `docker-compose.yml`.
-
-2. Pass the config to your docker container by adding a volume like this:
-
-```yaml
-    volumes:
-      - ./config.json:/app/config.json
-```
-
-3. Restart your container and your custom configuration should be active.
-
-Alternatively, you can [pass the configuration inline](docs/inline-configuration.md) from your `docker-compose.yml` file.
-
-### Immich Public Proxy options
-
-| Option                   | Type     | Description                                                                                                                                                                                                                                                       |
-|--------------------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `responseHeaders`        | `object` | Change the headers sent with your web responses. By default there is `cache-control` and CORS added.                                                                                                                                                              |
-| `singleImageGallery`     | `bool`   | By default a link to a single image will directly open the image file. Set to `true` if you want to show a gallery page instead for a single item.                                                                                                                |
-| `downloadOriginalPhoto`  | `bool`   | Set to `false` if you only want people to be able to download the 'preview' quality photo, rather than your original photo.                                                                                                                                       |
-| `downloadedFilename`     | `int`    | The filename of the downloaded image.<br>`0` for the original filename if available, falling back to the Immich asset ID<br>`1` for the Immich asset ID number<br>`2` for a shortened version of the asset ID: `img_` plus the first 8 characters of the asset ID |
-| `showGalleryTitle`       | `bool`   | Show a title on the gallery page. This is taken from the album title if it is an album being shared, otherwise the "Description" from the shared link will be used.                                                                                               |
-| `showGalleryDescription` | `bool`   | Show the album description below the title. This only applies if it is an album which is being shared.                                                                                                                                                            |
-| `allowDownloadAll`       | `int`    | Allow visitors to download all files as a zip.<br>`0` disable downloads<br>`1` follow Immich setting per share ([example](https://github.com/user-attachments/assets/79ea8c08-71ce-42ab-b025-10aec384938a))<br>`2` always allowed                                 |
-| `allowSlugLinks`         | `bool`   | Enable/disable the custom URL links.                                                                                                                                                                                                                              |
-| `showHomePage`           | `bool`   | Set to `false` to remove the IPP shield page at `/` and at `/share`                                                                                                                                                                                               |
-| `showMetadata`           | `object` | See the [Metadata](#metadata) section below.                                                                                                                                                                                                                      |
-| `customInvalidResponse`  | various  | Send a custom response instead of the default 404 - see [Custom responses](docs/custom-responses.md) for more details.                                                                                                                                            |
-
-For example, to disable the home page at `/` and at `/share` you need to change `showHomePage` to `false`:
-
-```json
-{
-  "ipp": {
-    "showHomePage": false,
-    ...
-  }
-}
-```
-
-#### Metadata
-
-| Option        | Type   | Description                                        |
-|---------------|--------|----------------------------------------------------|
-| `description` | `bool` | Show the description as a caption below the photo. |
-
-### lightGallery
-
-The gallery is created using [lightGallery](https://github.com/sachinchoolur/lightGallery).
-You can find all of lightGallery's settings here:
-https://www.lightgalleryjs.com/docs/settings/
-
-For example, to disable the download button for images, you would edit the `lightGallery` section and change `download` to `false`:
-
-```json
-{
-  "lightGallery": {
-    "controls": true,
-    "download": false,
-    "mobileSettings": {
-      "controls": false,
-      "showCloseIcon": true,
-      "download": false
-    }
-  }
-}
-```
-
-### Customising your error response pages
-
-You can customise the responses that IPP sends for invalid requests. For example you could:
-
-- Drop the connection entirely (no response).
-- Redirect to a new website.
-- Send a different status code.
-- Send a custom 404 page.
-- And so on...
-
-See [Custom responses](docs/custom-responses.md) for more details.
-
-### Serving from multiple domains
-
-If you're serving the same IPP from multiple domains, instead of setting the public URL in your docker-compose file, you can set it dynamically via a HTTP header in the request from your reverse proxy to IPP.
-
-1. Remove the `PUBLIC_BASE_URL` environment variable from your docker-compose file.
-
-2. Set a custom `publicBaseUrl` header on each request with the value of your public base URL (example `https://your-proxy-url.com`).
+See **[the configuration docs](docs/configuration.md)** for the full reference.
 
 ## Troubleshooting
 
@@ -241,13 +155,58 @@ From inside a Docker container, you can't reach another container using `localho
 
 [Here's a guide on connecting Docker containers](https://dionarodrigues.dev/blog/docker-networking-how-to-connect-different-containers).
 
+### IPP logs "Unable to reach Immich", but `curl` inside the container works
+
+If IPP can't connect to Immich even though the container clearly can, you'll see this in the logs:
+
+```
+Unable to reach Immich on http://immich_server:2283
+From the server IPP is running on, see if you can curl to http://immich_server:2283/api/server/ping and receive a JSON result.
+```
+
+yet running that same `curl` from a shell inside the container succeeds:
+
+```
+/app $ curl http://immich_server:2283/api/server/ping
+{"res":"pong"}
+```
+
+This happens with both Docker Compose service names (like `immich_server`) and hostnames from a local DNS
+resolver (for example an AdGuard Home or dnsmasq CNAME rewrite). It is a quirk of the musl libc used by the
+`node:alpine` base image, not IPP itself.
+
+Node's `fetch` asks for the IPv4 (A) and IPv6 (AAAA) records at once. If your resolver answers the AAAA query
+with `NXDOMAIN` instead of the correct empty `NOERROR`, musl fails the whole lookup - even though the IPv4
+address is valid - and IPP reports the connection as failed. `curl` and glibc (the non-alpine `node` image)
+tolerate this, which is why curl works and this only shows up here. The underlying error, hidden behind the log
+message above, is `getaddrinfo ENOTFOUND`.
+
+The reliable fix is to disable IPv6 for the container so only the IPv4 lookup happens. Add the `sysctls` block
+to your service in `docker-compose.yml`:
+
+```yaml
+services:
+  immich-public-proxy:
+    image: alangrainger/immich-public-proxy:latest
+    # ...your existing config...
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+```
+
+Alternatively, point `IMMICH_URL` at Immich's IP address (a numeric address skips DNS resolution entirely), or
+fix your resolver to return an empty `NOERROR` (NODATA) rather than `NXDOMAIN` for the missing AAAA record.
+
+See issues [#203](https://github.com/alangrainger/immich-public-proxy/issues/203) and
+[#263](https://github.com/alangrainger/immich-public-proxy/issues/263) for the full investigation.
+
 ## Feature requests
 
 You can [add feature requests here](https://github.com/alangrainger/immich-public-proxy/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop),
 however my goal with this project is to keep it as lean as possible.
 
-Due to the sensitivity of data contained within Immich, I want anyone with a bit of coding knowledge
-to be able to read this codebase and fully understand everything it is doing.
+Due to the sensitivity of data contained within Immich, this project optimises for auditability: the code 
+stays small enough that someone with coding experience can review it for security-relevant behavior.
 
 The most basic rule for this project is that it has **read-only** access to Immich.
 

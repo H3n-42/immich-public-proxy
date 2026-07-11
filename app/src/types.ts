@@ -102,6 +102,7 @@ export interface SharedLink {
     description?: string;
     albumThumbnailAssetId?: string;
     assetCount?: number;
+    allowUpload?: boolean;
   }
   expiresAt: string | null;
 }

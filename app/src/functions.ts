@@ -74,8 +74,8 @@ export function canUpload (share: SharedLink) {
     // Uploading is disabled in config.json
     return false
   }
-  // Return Immich's setting for this shared link
-  return !!share.allowUpload
+  // Check both top-level allowUpload and album.allowUpload (for Immich v3 compatibility)
+  return !!(share.allowUpload || share.album?.allowUpload)
 }
 
 export function escapeHtml (str: string): string {

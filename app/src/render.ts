@@ -1,10 +1,10 @@
-import immich from './immich'
 import { Response } from 'express-serve-static-core'
 import { Asset, AssetType, ImageSize, IncomingShareRequest, SharedLink } from './types'
 import { canDownload, canUpload, escapeHtml, getConfigOption } from './functions'
+import { buildUrl, apiUrl, validateImageSize, photoUrl, videoUrl, getVideoContentType, getPreviewImageSize } from './immich'
 import archiver from 'archiver'
 import { respondToInvalidRequest } from './invalidRequestHandler'
-import { sanitize } from './includes/sanitize'
+import { sanitize } from './utils/sanitize'
 
 class Render {
   lgConfig
@@ -18,7 +18,7 @@ class Render {
    */
   async assetBuffer (req: IncomingShareRequest, res: Response, asset: Asset, size?: ImageSize | string) {
     // Get meta info regarding the asset
-    const metaRes = await fetch(immich.buildUrl(immich.apiUrl() + '/assets/' + encodeURIComponent(asset.id), {
+    const metaRes = await fetch(buildUrl(apiUrl() + '/assets/' + encodeURIComponent(asset.id), {
       key: asset.key
     }))
     const meta = await metaRes.json()
@@ -31,7 +31,7 @@ class Render {
 
     // Prepare the request
     const headerList = ['content-type', 'content-length', 'last-modified', 'etag']
-    size = immich.validateImageSize(size)
+    size = validateImageSize(size)
     let subpath, sizeQueryParam
     if (asset.type === AssetType.video) {
       subpath = '/video/playback'
@@ -61,7 +61,7 @@ class Render {
     }
 
     // Request data from Immich
-    const url = immich.buildUrl(immich.apiUrl() + '/assets/' + encodeURIComponent(asset.id) + subpath, {
+    const url = buildUrl(apiUrl() + '/assets/' + encodeURIComponent(asset.id) + subpath, {
       [asset.keyType || 'key']: asset.key,
       size: sizeQueryParam,
       password: asset.password
@@ -117,8 +117,8 @@ class Render {
         video = JSON.stringify({
           source: [
             {
-              src: immich.videoUrl(share.key, asset.id),
-              type: await immich.getVideoContentType(asset)
+              src: videoUrl(share.key, asset.id),
+              type: await getVideoContentType(asset)
             }
           ],
           attributes: {
@@ -126,15 +126,15 @@ class Render {
             controls: 'controls'
           }
         })
-        downloadUrl = immich.videoUrl(share.key, asset.id)
+        downloadUrl = videoUrl(share.key, asset.id)
       }
       if (getConfigOption('ipp.downloadOriginalPhoto', true)) {
         // Add a download link for the original-size image, if configured in config.json
-        downloadUrl = immich.photoUrl(share.key, asset.id, ImageSize.original)
+        downloadUrl = photoUrl(share.key, asset.id, ImageSize.original)
       }
 
-      const thumbnailUrl = immich.photoUrl(share.key, asset.id, ImageSize.thumbnail)
-      const previewUrl = immich.photoUrl(share.key, asset.id, immich.getPreviewImageSize(asset))
+      const thumbnailUrl = photoUrl(share.key, asset.id, ImageSize.thumbnail)
+      const previewUrl = photoUrl(share.key, asset.id, getPreviewImageSize(asset))
       const description = getConfigOption('ipp.showMetadata.description', false) && typeof asset?.exifInfo?.description === 'string' ? escapeHtml(asset.exifInfo.description) : ''
 
       // Create the full HTML element source to pass to the gallery view
@@ -196,7 +196,7 @@ class Render {
     archive.pipe(res)
     await Promise.all(share.assets.map(async (asset) => {
       const endpoint = downloadOriginalAsset ? 'original' : 'thumbnail'
-      const url = immich.buildUrl(immich.apiUrl() + '/assets/' + encodeURIComponent(asset.id) + '/' + endpoint, {
+      const url = buildUrl(apiUrl() + '/assets/' + encodeURIComponent(asset.id) + '/' + endpoint, {
         key: asset.key,
         password: asset.password,
         size: downloadOriginalAsset ? '' : 'preview'

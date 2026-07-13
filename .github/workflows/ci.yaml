@@ -2,6 +2,10 @@ name: Create and publish a Docker image
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.2.3). If not specified, uses current branch'
+        required: false
   push:
     tags:
       - 'v*'
@@ -19,6 +23,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set lowercase image name
         run: echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV

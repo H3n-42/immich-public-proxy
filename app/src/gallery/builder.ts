@@ -7,6 +7,7 @@ import { Response } from 'express-serve-static-core'
 import { AssetType, ImageSize, SharedLink } from '../types'
 import { getConfigOption } from '../config/access'
 import { canDownload, title } from '../share'
+import { canUpload } from '../functions'
 import { toString } from '../utils/text'
 import { h } from 'preact'
 import { renderPage } from '../view/render'
@@ -137,6 +138,8 @@ export async function gallery (res: Response, share: SharedLink, openItem?: numb
     publicBaseUrl: toString(publicBaseUrl),
     path: '/share/' + share.key,
     showDownload: downloadAllowed,
+    showUpload: canUpload(share),
+    uploadPath: '/share/' + share.key + '/upload',
     showTitle: !!getConfigOption('ipp.gallery.showTitle', true),
     openItem,
     ogImageItem,

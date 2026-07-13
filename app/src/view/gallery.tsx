@@ -12,6 +12,8 @@ export interface GalleryProps {
   publicBaseUrl: string
   path: string
   showDownload: boolean
+  showUpload: boolean
+  uploadPath: string
   showTitle: boolean
   openItem?: number
   ogImageItem?: GalleryItem
@@ -89,6 +91,115 @@ export function Gallery (props: GalleryProps) {
 {/* Container is intentionally empty - web.js's virtualisation manager
             populates it with only the tiles within the viewport buffer. */}
         <div id="gallery"></div>
+        {props.showUpload && (
+          <>
+            <div id="upload-toast" class="upload-toast" role="status" aria-live="polite"></div>
+            <button class="upload-fab" id="upload-fab" type="button" title="Upload photos" aria-label="Upload photos">
+              <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M11 16V7.85l-2.6 2.6L7 9l5-5 5 5-1.4 1.45-2.6-2.6V16h-2Zm-5 4q-.825 0-1.413-.588T4 18v-3h2v3h12v-3h2v3q0 .825-.588 1.413T18 20H6Z"/>
+              </svg>
+              <span class="fab-spinner"></span>
+            </button>
+            <input type="file" id="upload-input" multiple style="display:none" accept="image/*,video/*"/>
+            <script type="text/javascript">
+              {`
+                (function () {
+                  const fab = document.getElementById('upload-fab')
+                  const input = document.getElementById('upload-input')
+                  const toast = document.getElementById('upload-toast')
+                  const uploadPath = '${props.uploadPath}'
+                  let toastTimer = null
+
+                  function showToast (msg, type) {
+                    if (toastTimer) clearTimeout(toastTimer)
+                    toast.textContent = msg
+                    toast.className = 'upload-toast visible ' + type
+                    if (type === 'success') {
+                      toastTimer = setTimeout(function () { toast.className = 'upload-toast' }, 4000)
+                    }
+                  }
+
+                  toast.addEventListener('click', function () {
+                    toast.className = 'upload-toast'
+                  })
+
+                  function retryThumbnail (img, baseUrl, attempt) {
+                    var maxAttempts = 5
+                    var delay = Math.min(2000 * Math.pow(2, attempt), 30000)
+                    setTimeout(function () {
+                      img.onload = function () {
+                        img.parentElement.classList.remove('thumb-loading')
+                      }
+                      img.onerror = function () {
+                        if (attempt + 1 < maxAttempts) {
+                          retryThumbnail(img, baseUrl, attempt + 1)
+                        } else {
+                          img.parentElement.classList.remove('thumb-loading')
+                          img.parentElement.classList.add('thumb-error')
+                        }
+                      }
+                      img.src = baseUrl + '?t=' + Date.now()
+                    }, delay)
+                  }
+
+                  fab.addEventListener('click', function () {
+                    input.click()
+                  })
+
+                  input.addEventListener('change', async function () {
+                    const files = input.files
+                    if (!files || files.length === 0) return
+
+                    fab.disabled = true
+                    fab.classList.add('uploading')
+                    showToast('Uploading ' + files.length + ' file' + (files.length > 1 ? 's' : '') + '…', '')
+
+                    const formData = new FormData()
+                    for (const file of files) {
+                      formData.append('assets', file)
+                    }
+
+                    try {
+                      const res = await fetch(uploadPath, { method: 'POST', body: formData })
+                      if (!res.ok) {
+                        showToast('Upload failed. Tap to dismiss.', 'error')
+                      } else {
+                        const data = await res.json()
+                        const succeeded = data.results.filter(function (r) { return r.status !== 'failed' }).length
+                        const failed = data.results.filter(function (r) { return r.status === 'failed' }).length
+                        let msg = succeeded + ' file' + (succeeded !== 1 ? 's' : '') + ' uploaded.'
+                        if (failed > 0) msg += ' ' + failed + ' failed. Tap to dismiss.'
+                        showToast(msg, failed > 0 ? 'error' : 'success')
+
+                        const gallery = document.getElementById('gallery')
+                        data.results.forEach(function (r) {
+                          if (!r.id || r.status === 'failed' || r.status === 'duplicate') return
+                          const thumbnail = '/share/photo/' + shareKey + '/' + r.id + '/thumbnail'
+                          const preview = '/share/photo/' + shareKey + '/' + r.id + '/preview'
+                          const download = '/share/photo/' + shareKey + '/' + r.id + '/original'
+                          const filename = r.filename || r.id
+                          const html = '<a href="' + preview + '"' +
+                            ' data-download-url="' + download + '"' +
+                            ' data-download="' + filename + '"' +
+                            ' data-slide-name="' + r.id + '">' +
+                            '<img alt="" loading="lazy" src="' + thumbnail + '"/>' +
+                            '</a>'
+                          gallery.insertAdjacentHTML('beforeend', html)
+                        })
+                      }
+                    } catch (e) {
+                      showToast('Upload failed: ' + e.message + '. Tap to dismiss.', 'error')
+                    }
+
+                    fab.disabled = false
+                    fab.classList.remove('uploading')
+                    input.value = ''
+                  })
+                })()
+              `}
+            </script>
+          </>
+        )}
         {props.showDownload && (
           <div id="select-toolbar" hidden>
             <button id="select-cancel" class="toolbar-btn" type="button" aria-label="Exit selection mode">

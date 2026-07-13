@@ -291,8 +291,10 @@ async function fetchShareByKey (key: string, password?: string, keyType: KeyType
         // Normal response - get the shared assets
         link = jsonBody as SharedLink
         link.keyType = keyType
-        // Debug: log allowUpload property
+        // Debug: log allowUpload properties
         log('Shared link allowUpload: ' + link.allowUpload + ' for key ' + key)
+        log('Shared link album.allowUpload: ' + link.album?.allowUpload + ' for key ' + key)
+        log('Shared link type: ' + link.type + ' for key ' + key)
 
         // For an album, `/shared-links/me` returns an empty `assets` array
         // (Immich 3.0 dropped album assets from both that response and

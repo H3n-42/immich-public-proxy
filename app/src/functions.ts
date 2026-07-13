@@ -70,12 +70,18 @@ export function canDownload (share: SharedLink) {
 }
 
 export function canUpload (share: SharedLink) {
-  if (!getConfigOption('ipp.allowUpload', false)) {
+  const configEnabled = getConfigOption('ipp.allowUpload', false)
+  const shareAllowUpload = share.allowUpload
+  const albumAllowUpload = share.album?.allowUpload
+  
+  log('canUpload check - config: ' + configEnabled + ', share.allowUpload: ' + shareAllowUpload + ', album.allowUpload: ' + albumAllowUpload)
+  
+  if (!configEnabled) {
     // Uploading is disabled in config.json
     return false
   }
   // Check both top-level allowUpload and album.allowUpload (for Immich v3 compatibility)
-  return !!(share.allowUpload || share.album?.allowUpload)
+  return !!(shareAllowUpload || albumAllowUpload)
 }
 
 export function escapeHtml (str: string): string {

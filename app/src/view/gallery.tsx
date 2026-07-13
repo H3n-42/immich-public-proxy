@@ -33,6 +33,7 @@ export function Gallery (props: GalleryProps) {
     metaBase: props.metaBase
   })
   const firstItem = props.items[0]
+  const shareKey = props.path.split('/').pop() || ''
   // og:image prefers the album cover (passed via props); for videos, previewUrl
   // points to the .mp4, so use thumbnailUrl to keep og:image a still JPEG.
   const ogItem = props.ogImageItem || firstItem
@@ -101,13 +102,13 @@ export function Gallery (props: GalleryProps) {
               <span class="fab-spinner"></span>
             </button>
             <input type="file" id="upload-input" multiple style="display:none" accept="image/*,video/*"/>
-            <script type="text/javascript">
-              {`
-                (function () {
+            <script type="text/javascript" dangerouslySetInnerHTML={{
+              __html: `(function () {
                   const fab = document.getElementById('upload-fab')
                   const input = document.getElementById('upload-input')
                   const toast = document.getElementById('upload-toast')
                   const uploadPath = '${props.uploadPath}'
+                  const shareKey = '${shareKey}'
                   let toastTimer = null
 
                   function showToast (msg, type) {
@@ -195,9 +196,8 @@ export function Gallery (props: GalleryProps) {
                     fab.classList.remove('uploading')
                     input.value = ''
                   })
-                })()
-              `}
-            </script>
+                })()`
+            }} />
           </>
         )}
         {props.showDownload && (

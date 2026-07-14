@@ -63,13 +63,27 @@ export async function assetBuffer (req: IncomingShareRequest, res: Response, ass
   const data = await fetch(url, { headers: { ...fetchHeaders, ...reqHeaders } })
 
   if (data.status < 200 || data.status >= 300) {
-    let immichMessage = ''
-    try {
-      const json = await data.json()
-      if (json.message) immichMessage = '\nResponse from Immich: ' + json.message
-    } catch (e) { }
-    respondToInvalidRequest(res, 404, 'Failed response from Immich for asset ' + asset.id + ' on this URL:\n' + url + immichMessage)
-    return
+    // For thumbnail requests that fail (e.g., not yet generated after upload),
+    // fall back to preview size
+    if (servedSize === ImageSize.thumbnail) {
+      const endpoint = resolveImageEndpoint(ImageSize.preview, asset)
+      const fallbackUrl = assetFetchUrl(asset, endpoint.subpath, endpoint.sizeQueryParam)
+      const fallbackData = await fetch(fallbackUrl, { headers: { ...fetchHeaders, ...reqHeaders } })
+      if (fallbackData.status >= 200 && fallbackData.status < 300) {
+        data = fallbackData
+        servedSize = ImageSize.preview
+      }
+    }
+    
+    if (data.status < 200 || data.status >= 300) {
+      let immichMessage = ''
+      try {
+        const json = await data.json()
+        if (json.message) immichMessage = '\nResponse from Immich: ' + json.message
+      } catch (e) { }
+      respondToInvalidRequest(res, 404, 'Failed response from Immich for asset ' + asset.id + ' on this URL:\n' + url + immichMessage)
+      return
+    }
   }
 
   if (attachment && asset.originalFileName) {

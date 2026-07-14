@@ -137,11 +137,21 @@ export async function request (endpoint: string, init?: RequestInit) {
    * Upload a file to an Immich shared album on behalf of the visitor.
    * Requires the shared link to have `allowUpload` enabled in Immich.
    */
-  export async function uploadAsset (key: string, keyType: KeyType, password: string | undefined, file: Express.Multer.File): Promise<{ id: string; status: string }> {
-    const url = buildUrl(apiUrl() + '/assets', {
-      [keyType]: key,
-      password
-    })
+  export async function uploadAsset (key: string, keyType: KeyType, password: string | undefined, file: Express.Multer.File, albumId?: string): Promise<{ id: string; status: string }> {
+    // For album uploads, use albumId parameter; for individual shares, use the key
+    const queryParams: Record<string, string> = {
+      password: password || ''
+    }
+    
+    if (albumId) {
+      // Upload to album - use albumId parameter
+      queryParams.albumId = albumId
+    } else {
+      // Upload to individual share - use key parameter
+      queryParams[keyType] = key
+    }
+    
+    const url = buildUrl(apiUrl() + '/assets', queryParams)
     const now = new Date().toISOString()
     const form = new FormData()
     form.append('assetData', new Blob([file.buffer.buffer as ArrayBuffer], { type: file.mimetype }), file.originalname)
@@ -639,3 +649,73 @@ export function validateImageSize (size: unknown) {
 export function getKeyTypeFromShare (shareType: string) {
   return shareType === 's' ? KeyType.slug : KeyType.key
 }
+
+/**
+ * Invalidate the share cache entry for a given key.
+ * Call this after uploads to ensure the gallery reflects new assets immediately.
+ */
+export function invalidateShareCache (key: string, keyType: KeyType, password?: string) {
+  // Invalidate share lookup cache
+  const shareCacheKey = `${keyType}:${key}:${password || ''}`
+  shareCache.delete(shareCacheKey)
+  
+  // Invalidate token cache for this share
+  const tokenCacheKey = `${keyType}:${key}:${password || ''}`
+  ;(tokenCache as any).delete(tokenCacheKey)
+}
+
+/**
+ * Retry fetching share data with exponential backoff until the asset count
+ * matches or timeout is reached. Used after uploads to wait for Immich to
+ * index the new asset into the timeline.
+ * 
+ * @param key The share key
+ * @param password Optional password
+ * @param keyType The key type (key or slug)
+ * @param expectedAssetCount Expected number of assets after upload
+ * @param maxRetries Maximum number of retry attempts
+ * @param initialDelayMs Initial delay between retries in milliseconds
+ * @returns The share result with updated asset list
+ */
+export async function getShareWithRetry (
+  key: string,
+  password?: string,
+  keyType: KeyType = KeyType.key,
+  expectedAssetCount?: number,
+  maxRetries: number = 10,
+  initialDelayMs: number = 500
+): Promise<SharedLinkResult> {
+  let retries = 0
+  let delay = initialDelayMs
+  
+  while (retries < maxRetries) {
+    // Invalidate cache to force fresh fetch
+    invalidateShareCache(key, keyType, password)
+    
+    const result = await getShareByKey(key, password, keyType)
+    
+    // If we don't have an expected count, just return the first valid result
+    if (!expectedAssetCount || !result.valid || !result.link) {
+      return result
+    }
+    
+    // Check if we have the expected number of assets
+    if (result.link.assets.length >= expectedAssetCount) {
+      log(`Share retry succeeded after ${retries} attempts: found ${result.link.assets.length} assets`)
+      return result
+    }
+    
+    log(`Share retry ${retries + 1}/${maxRetries}: found ${result.link.assets.length}/${expectedAssetCount} assets, waiting ${delay}ms...`)
+    retries++
+    
+    // Exponential backoff with max 5 second delay
+    await new Promise(resolve => setTimeout(resolve, Math.min(delay, 5000)))
+    delay = Math.min(delay * 2, 5000)
+  }
+  
+  // If we exhausted retries, return the last result anyway
+  log(`Share retry exhausted ${maxRetries} attempts, returning best result`)
+  invalidateShareCache(key, keyType, password)
+  return getShareByKey(key, password, keyType)
+}
+

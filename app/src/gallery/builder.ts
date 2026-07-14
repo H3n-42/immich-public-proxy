@@ -68,7 +68,10 @@ export async function gallery (res: Response, share: SharedLink, openItem?: numb
     }
 
     const downloadUrl = photoUrl(share.key, asset.id, ImageSize.original)
-    const thumbnailUrl = photoUrl(share.key, asset.id, ImageSize.thumbnail)
+    // Use preview for thumbnails from timeline API (actual thumbnails may not exist yet after upload)
+    const thumbnailUrl = asset.needsDetail 
+      ? photoUrl(share.key, asset.id, ImageSize.preview)
+      : photoUrl(share.key, asset.id, ImageSize.thumbnail)
     // Always request `preview`; the resolver floors gif/video up to the
     // original on its own (their preview is a static frame).
     const previewUrl = photoUrl(share.key, asset.id, ImageSize.preview)

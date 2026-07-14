@@ -8,7 +8,9 @@ import {
   fetchAssetDetail,
   getKeyTypeFromShare,
   getShareByKey,
+  getShareWithRetry,
   handleShareRequest,
+  invalidateShareCache,
   isId,
   isKey,
   uploadAsset
@@ -109,6 +111,10 @@ type SharedAssetResolution =
 async function resolveShare (req: Request, keyType: KeyType): Promise<ShareResolution> {
   if (!isKey(req.params.key)) {
     return { ok: false, status: 404, reason: 'Invalid key for ' + req.path }
+  }
+  // Invalidate cache if refresh parameter is present (cache-busted reload)
+  if (req.query.refresh) {
+    invalidateShareCache(req.params.key, keyType, req.password)
   }
   // The password is provided from the encrypted session cookie (if set) by
   // decodeCookie. Validating the share here prevents direct URL access from
@@ -258,15 +264,39 @@ app.post('/share/:key/upload', decodeCookie, multerUpload, async (req, res) => {
     return
   }
 
+  const originalAssetCount = share.link!.assets.length
+  
   const results = await Promise.all(files.map(async (file) => {
     try {
-      const result = await uploadAsset(share.link!.key, share.link!.keyType, req.password, file)
+      // For album shares, pass the albumId; for individual shares, don't
+      const albumId = share.link!.type === 'album' && share.link!.album?.id ? share.link!.album.id : undefined
+      const result = await uploadAsset(share.link!.key, share.link!.keyType, req.password, file, albumId)
       return { filename: file.originalname, status: result.status, id: result.id }
     } catch (e) {
       log('Upload failed for file ' + file.originalname + ': ' + (e as Error).message)
       return { filename: file.originalname, status: 'failed' }
     }
   }))
+
+  // Wait for Immich to index the uploaded assets into the timeline
+  // This ensures the gallery shows the new assets immediately
+  const successfulUploads = results.filter(r => r.status !== 'failed').length
+  if (successfulUploads > 0) {
+    const expectedAssetCount = originalAssetCount + successfulUploads
+    log(`Waiting for ${successfulUploads} uploaded asset(s) to appear in timeline (expecting ${expectedAssetCount} total)...`)
+    
+    // Retry fetching the share until we see all uploaded assets
+    await getShareWithRetry(
+      req.params.key,
+      req.password,
+      share.link!.keyType,
+      expectedAssetCount,
+      10,  // max 10 retries
+      500  // start with 500ms delay
+    )
+    
+    log(`Upload complete: ${successfulUploads} asset(s) now visible in gallery`)
+  }
 
   res.json({ results })
 })

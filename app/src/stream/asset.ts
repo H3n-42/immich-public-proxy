@@ -60,7 +60,7 @@ export async function assetBuffer (req: IncomingShareRequest, res: Response, ass
 
   const url = assetFetchUrl(asset, subpath, sizeQueryParam)
   const reqHeaders = await authHeadersForAsset(asset)
-  const data = await fetch(url, { headers: { ...fetchHeaders, ...reqHeaders } })
+  let data = await fetch(url, { headers: { ...fetchHeaders, ...reqHeaders } })
 
   if (data.status < 200 || data.status >= 300) {
     // For thumbnail requests that fail (e.g., not yet generated after upload),
